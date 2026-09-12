@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  body { background: #0a0e1a; height: 100vh; display: flex; flex-direction: column; }
+  .header { background: linear-gradient(135deg, #2a93e8, #2076c9); color: white; padding: 14px 18px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .header .avatar { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .header h1 { font-size: 15px; font-weight: 600; }
+  .header p { font-size: 11px; opacity: 0.85; }
+  .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-wrap: break-word; }
+  .msg.bot { background: #16203a; color: #c8d3e8; align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.user { background: linear-gradient(135deg, #2a93e8, #2076c9); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg-form { display: flex; gap: 8px; padding: 12px; background: #0d1424; border-top: 1px solid #1a2540; flex-shrink: 0; }
+  .msg-form input { flex: 1; background: #16203a; border: 1px solid #2a3a5a; border-radius: 12px; padding: 10px 14px; color: white; font-size: 14px; outline: none; }
+  .msg-form input:focus { border-color: #2a93e8; }
+  .msg-form button { background: linear-gradient(135deg, #2a93e8, #2076c9); color: white; border: none; border-radius: 12px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+  .msg-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .msg-form button:active { transform: scale(0.97); }
+  .intro { text-align: center; padding: 40px 20px; color: #5a6a8a; }
+  .intro h2 { font-size: 16px; color: #8a9aba; margin-bottom: 8px; }
+  .intro p { font-size: 13px; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; color: #8a9aba; margin-bottom: 4px; font-weight: 500; }
+  .form-group input { width: 100%; background: #16203a; border: 1px solid #2a3a5a; border-radius: 12px; padding: 10px 14px; color: white; font-size: 14px; outline: none; }
+  .form-group input:focus { border-color: #2a93e8; }
+  .start-btn { width: 100%; background: linear-gradient(135deg, #2a93e8, #2076c9); color: white; border: none; border-radius: 12px; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; transition: transform 0.1s; }
+  .start-btn:active { transform: scale(0.98); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="avatar">💬</div>
+  <div>
+    <h1 id="dealer-name">Atendimento</h1>
+    <p>Online agora · Responde rapidinho</p>
+  </div>
+</div>
+
+<div class="messages" id="messages">
+  <div class="intro" id="intro">
+    <h2>Olá! Como podemos ajudar?</h2>
+    <p>Preencha seus dados e comece a conversar</p>
+    <div style="margin-top: 24px; text-align: left;">
+      <div class="form-group">
+        <label>Seu nome</label>
+        <input type="text" id="name-input" placeholder="Digite seu nome" />
+      </div>
+      <div class="form-group">
+        <label>Seu WhatsApp</label>
+        <input type="tel" id="phone-input" placeholder="(11) 99999-8888" />
+      </div>
+      <button class="start-btn" id="start-btn">Iniciar conversa</button>
+    </div>
+  </div>
+</div>
+
+<div class="msg-form" id="msg-form" style="display: none;">
+  <input type="text" id="msg-input" placeholder="Digite sua mensagem..." />
+  <button id="send-btn">Enviar</button>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const dealerId = params.get('dealer');
+const supabaseUrl = 'https://rzobibhaoyetdcwkzhjg.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6b2JpYmhhb3lldGRjd2t6aGpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTA4MjEsImV4cCI6MjEwMTUyNjgyMX0.zhfB7sFwzL87RzrNxXPPZGtUZI33N24iUATqwz-SywE';
+
+// Fetch dealer name
+fetch(supabaseUrl + '/rest/v1/dealers?id=eq.' + dealerId + '&select=name', {
+  headers: { apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey }
+})
+.then(r => r.json())
+.then(data => { if (data && data[0]) document.getElementById('dealer-name').textContent = data[0].name; })
+.catch(() => {});
+
+let conversationId = null;
+let dealerName = 'a loja';
+
+function startConversation() {
+  const name = document.getElementById('name-input').value.trim();
+  const phone = document.getElementById('phone-input').value.trim();
+  if (!name || !phone) return;
+
+  document.getElementById('intro').style.display = 'none';
+  document.getElementById('msg-form').style.display = 'flex';
+
+  // Create conversation via SECURITY DEFINER function (allows anon access)
+  fetch(supabaseUrl + '/rest/v1/rpc/create_site_conversation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey },
+    body: JSON.stringify({ p_dealer_id: dealerId, p_contact_name: name, p_contact_phone: phone }),
+  })
+  .then(r => r.json())
+  .then(data => { if (data) conversationId = data; })
+  .catch(() => {});
+
+  addBotMessage('Olá, ' + name + '! Obrigado pelo contato. Em que podemos ajudar?');
+}
+
+function addBotMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'msg bot';
+  div.textContent = text;
+  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+}
+
+function addUserMessage(text) {
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.textContent = text;
+  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+}
+
+function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addUserMessage(text);
+
+  // Save message
+  if (conversationId) {
+    fetch(supabaseUrl + '/rest/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey },
+      body: JSON.stringify({ conversation_id: conversationId, dealer_id: dealerId, direction: 'inbound', content: text, content_type: 'text', ai_analysis: {}, ai_extracted_data: {} }),
+    }).catch(() => {});
+
+    // Forward to AI qualifier
+    fetch(supabaseUrl + '/functions/v1/ai-lead-qualifier', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'process_message', dealer_id: dealerId, channel: 'site', contact_name: null, contact_phone: null, message_content: text, conversation_id: conversationId }),
+    }).catch(() => {});
+  }
+
+  // Update conversation preview
+  if (conversationId) {
+    fetch(supabaseUrl + '/rest/v1/conversations?id=eq.' + conversationId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', apikey: supabaseKey, Authorization: 'Bearer ' + supabaseKey },
+      body: JSON.stringify({ last_message_at: new Date().toISOString(), last_message_preview: text.slice(0, 100), unread_count: 1, updated_at: new Date().toISOString() }),
+    }).catch(() => {});
+  }
+}
+
+document.getElementById('start-btn').addEventListener('click', startConversation);
+document.getElementById('send-btn').addEventListener('click', sendMessage);
+document.getElementById('msg-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendMessage(); });
+</script>
+
+</body>
+</html>
