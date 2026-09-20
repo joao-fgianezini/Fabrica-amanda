@@ -12,8 +12,6 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-type Temperature = "hot" | "warm" | "cold";
-
 type Analysis = {
   vehicle_interest: string | null;
   budget: number | null;
@@ -22,26 +20,18 @@ type Analysis = {
   intent: string;
   sentiment: string;
   lead_score: number;
-  temperature: Temperature;
   summary: string;
   suggested_action: string;
   should_create_lead: boolean;
   is_lead: boolean;
   is_personal: boolean;
   conversation_type: "lead" | "personal" | "spam";
-  purchase_intent: "high" | "medium" | "low" | null;
-  financing_interest: boolean;
-  trade_in_interest: boolean;
-  estimated_budget: number | null;
-  preferred_down_payment: number | null;
-  purchase_deadline: string | null;
-  next_best_action: string;
-  reply_suggestion: string | null;
 };
 
 function analyzeMessage(content: string): Analysis {
   const lower = content.toLowerCase();
 
+  // --- Distinguish lead vs personal vs spam ---
   const businessKeywords = [
     "carro", "veiculo", "veículo", "moto", "caminhao", "caminhão",
     "preco", "preço", "valor", "comprar", "compra", "vender", "venda",
@@ -91,7 +81,7 @@ function analyzeMessage(content: string): Analysis {
     const m = content.match(p);
     if (m && m[1] && m[1].trim().length > 2) { vehicle_interest = m[1].trim().substring(0, 100); break; }
   }
-  const carBrands = ["corolla","hilux","civic","onix","ka","hb20","compass","renegade","t-cross","nivus","gol","virtus","polo","creta","kwid","kicks","s10","ranger","strada","toro","pulse","tracker","trend","argo","cronos","bolt","spin"];
+  const carBrands = ["corolla","hilux","civic","onix","ka","hb20","compass","renegade","t-cross","nivus","gol","virtus","polo","creta","kwid","kicks","s10","ranger","strada","toro","pulse","tracker","trend","argo","cronos","bolt","spin"," Tracker"];
   if (!vehicle_interest) {
     for (const brand of carBrands) if (lower.includes(brand)) { vehicle_interest = brand.charAt(0).toUpperCase() + brand.slice(1); break; }
   }
@@ -153,37 +143,12 @@ function analyzeMessage(content: string): Analysis {
   if (sentiment === "negative") lead_score -= 10;
   lead_score = Math.max(0, Math.min(100, lead_score));
 
-  // --- Temperature classification ---
-  let temperature: Temperature = "cold";
-  if (lead_score >= 70 || intent === "high_intent") temperature = "hot";
-  else if (lead_score >= 45) temperature = "warm";
-
-  // --- Purchase intent level ---
-  let purchase_intent: "high" | "medium" | "low" | null = null;
-  if (is_lead) {
-    if (intent === "high_intent" || lead_score >= 70) purchase_intent = "high";
-    else if (lead_score >= 45 || intent === "financing" || intent === "visit") purchase_intent = "medium";
-    else purchase_intent = "low";
-  }
-
-  // --- Financing & trade-in interest ---
-  const financing_interest = is_lead && (intent === "financing" || lower.includes("financiar") || lower.includes("financiamento") || lower.includes("parcelar") || lower.includes("parcela") || down_payment !== null);
-  const trade_in_interest = lower.includes("troca") || lower.includes("permuta") || lower.includes("meu carro");
-
-  // --- Purchase deadline ---
-  let purchase_deadline: string | null = null;
-  if (lower.includes("hoje") || lower.includes("agora") || lower.includes("urgente")) purchase_deadline = "Imediato";
-  else if (lower.includes("essa semana") || lower.includes("semana que vem")) purchase_deadline = "Esta semana";
-  else if (lower.includes("esse mes") || lower.includes("este mês") || lower.includes("mes que vem") || lower.includes("mês que vem")) purchase_deadline = "Este mês";
-
   // --- Summary ---
   const parts: string[] = [];
   if (vehicle_interest) parts.push(`Interessado em: ${vehicle_interest}`);
   if (budget) parts.push(`Orçamento: R$ ${budget.toLocaleString("pt-BR")}`);
   if (down_payment) parts.push(`Entrada: R$ ${down_payment.toLocaleString("pt-BR")}`);
   if (max_installment) parts.push(`Parcela máx: R$ ${max_installment.toLocaleString("pt-BR")}`);
-  if (financing_interest) parts.push("Quer financiamento");
-  if (trade_in_interest) parts.push("Tem troca");
   const summary = parts.length > 0 ? parts.join(" · ") : (is_lead ? "Cliente interessado em veículos" : isSpam ? "Possível spam" : "Conversa pessoal");
 
   // --- Suggested action ---
@@ -196,47 +161,9 @@ function analyzeMessage(content: string): Analysis {
   else if (intent === "visit") suggested_action = "Agendar visita ou test drive";
   else if (intent === "trade_in") suggested_action = "Avaliar veículo de troca";
 
-  // --- Next best action (more structured) ---
-  let next_best_action = suggested_action;
-  if (financing_interest && vehicle_interest) {
-    next_best_action = `Realizar simulação de financiamento do ${vehicle_interest} com entrada de R$ ${down_payment ? down_payment.toLocaleString("pt-BR") : "0"}`;
-  } else if (intent === "visit") {
-    next_best_action = "Agendar visita ao showroom / test drive";
-  } else if (intent === "trade_in") {
-    next_best_action = "Avaliar veículo de troca e apresentar proposta";
-  } else if (intent === "pricing" && vehicle_interest) {
-    next_best_action = `Enviar preço e ficha técnica do ${vehicle_interest}`;
-  }
-
-  // --- AI Reply Suggestion ---
-  let reply_suggestion: string | null = null;
-  if (is_lead && !isSpam) {
-    if (financing_interest && vehicle_interest && down_payment) {
-      reply_suggestion = `Olá! Sim, o ${vehicle_interest} está disponível. Posso fazer uma simulação de financiamento considerando R$ ${down_payment.toLocaleString("pt-BR")} de entrada. Quer que eu calcule as parcelas?`;
-    } else if (intent === "pricing" && vehicle_interest) {
-      reply_suggestion = `Olá! O ${vehicle_interest} está disponível sim. Vou te passar o valor e as condições. Tem interesse em financiamento ou pagamento à vista?`;
-    } else if (intent === "visit") {
-      reply_suggestion = `Perfeito! Podemos agendar uma visita e um test drive. Qual dia e horário seria melhor para você?`;
-    } else if (intent === "trade_in") {
-      reply_suggestion = `Ótimo! Aceitamos troca sim. Me conte mais sobre o seu veículo (marca, modelo, ano e km) que eu faço uma avaliação para você.`;
-    } else if (intent === "high_intent" && vehicle_interest) {
-      reply_suggestion = `Olá! Que ótimo que tem interesse no ${vehicle_interest}! Ele está disponível sim. Quer que eu te envie mais fotos e detalhes?`;
-    } else if (vehicle_interest) {
-      reply_suggestion = `Olá! O ${vehicle_interest} está disponível. Posso te enviar mais informações e fotos. Você já tem alguma condição em mente?`;
-    } else {
-      reply_suggestion = `Olá! Que bom ter seu contato. Tem algum veículo específico em mente? Posso te ajudar a encontrar o carro ideal.`;
-    }
-  }
-
   const should_create_lead = is_lead && !isSpam && (lead_score >= 40 || intent !== "inquiry" || vehicle_interest !== null);
 
-  return {
-    vehicle_interest, budget, down_payment, max_installment, intent, sentiment,
-    lead_score, temperature, summary, suggested_action, should_create_lead,
-    is_lead, is_personal, conversation_type, purchase_intent, financing_interest,
-    trade_in_interest, estimated_budget: budget, preferred_down_payment: down_payment,
-    purchase_deadline, next_best_action, reply_suggestion,
-  };
+  return { vehicle_interest, budget, down_payment, max_installment, intent, sentiment, lead_score, summary, suggested_action, should_create_lead, is_lead, is_personal, conversation_type };
 }
 
 async function processMessage(params: {
@@ -248,11 +175,11 @@ async function processMessage(params: {
   message_content: string;
   conversation_id?: string | null;
   integration_account_id?: string | null;
-  external_id?: string | null;
 }) {
-  const { dealer_id, channel, contact_name, contact_phone, contact_handle, message_content, conversation_id, integration_account_id, external_id } = params;
+  const { dealer_id, channel, contact_name, contact_phone, contact_handle, message_content, conversation_id, integration_account_id } = params;
   const analysis = analyzeMessage(message_content);
 
+  // Skip processing for spam
   if (analysis.conversation_type === "spam") {
     return { success: true, analysis, skipped: true, reason: "spam_detected" };
   }
@@ -311,11 +238,11 @@ async function processMessage(params: {
 
   let leadId: string | null = null;
   if (convId) {
-    const { data: conv } = await supabase.from("conversations").select("lead_id").eq("id", convId).maybeSingle();
+    const { data: conv } = await supabase.from("conversations").select("lead_id").eq("id", convId).single();
     if (conv) leadId = conv.lead_id;
   }
 
-  // Create or update lead
+  // Create or update lead only if AI says it's a lead
   if (analysis.should_create_lead && !leadId) {
     const { data: newLead } = await supabase
       .from("leads").insert({
@@ -342,7 +269,7 @@ async function processMessage(params: {
     }).eq("id", leadId);
   }
 
-  // Create or update conversation with temperature + vehicle
+  // Create or update conversation
   if (!convId) {
     const { data: newConv } = await supabase
       .from("conversations").insert({
@@ -356,9 +283,6 @@ async function processMessage(params: {
         unread_count: 1, ai_summary: analysis.summary,
         ai_sentiment: analysis.sentiment, ai_intent: analysis.intent,
         ai_qualified: analysis.should_create_lead,
-        ai_temperature: analysis.temperature,
-        vehicle_id: vehicleId,
-        external_id: external_id || null,
       }).select("*").single();
     if (newConv) convId = newConv.id;
   } else {
@@ -368,8 +292,6 @@ async function processMessage(params: {
       unread_count: 1, ai_summary: analysis.summary,
       ai_sentiment: analysis.sentiment, ai_intent: analysis.intent,
       ai_qualified: analysis.should_create_lead,
-      ai_temperature: analysis.temperature,
-      vehicle_id: vehicleId ?? undefined,
       lead_id: leadId, updated_at: new Date().toISOString(),
     }).eq("id", convId);
   }
@@ -379,26 +301,15 @@ async function processMessage(params: {
     .from("messages").insert({
       conversation_id: convId, dealer_id, direction: "inbound",
       content: message_content || "", content_type: "text",
-      external_id: external_id || null,
       ai_extracted_data: {
         vehicle_interest: analysis.vehicle_interest, budget: analysis.budget,
         down_payment: analysis.down_payment, max_installment: analysis.max_installment,
         intent: analysis.intent, conversation_type: analysis.conversation_type,
-        temperature: analysis.temperature,
-        purchase_intent: analysis.purchase_intent,
-        financing_interest: analysis.financing_interest,
-        trade_in_interest: analysis.trade_in_interest,
-        estimated_budget: analysis.estimated_budget,
-        preferred_down_payment: analysis.preferred_down_payment,
-        purchase_deadline: analysis.purchase_deadline,
       },
       ai_analysis: {
         sentiment: analysis.sentiment, lead_score: analysis.lead_score,
         summary: analysis.summary, suggested_action: analysis.suggested_action,
         is_lead: analysis.is_lead, is_personal: analysis.is_personal,
-        temperature: analysis.temperature,
-        next_best_action: analysis.next_best_action,
-        reply_suggestion: analysis.reply_suggestion,
       },
     }).select("*").single();
 
@@ -406,11 +317,11 @@ async function processMessage(params: {
   await supabase.from("lead_tracking_events").insert({
     dealer_id, lead_id: leadId, event_type: "message_received",
     channel: channel || null, vehicle_id: vehicleId,
-    metadata: { analysis: { conversation_type: analysis.conversation_type, lead_score: analysis.lead_score, temperature: analysis.temperature }, conversation_id: convId },
+    metadata: { analysis: { conversation_type: analysis.conversation_type, lead_score: analysis.lead_score }, conversation_id: convId },
   });
 
   // AI-suggested follow-up for qualified leads
-  if (analysis.should_create_lead && leadId && analysis.temperature === "hot") {
+  if (analysis.should_create_lead && leadId) {
     await supabase.from("lead_follow_ups").insert({
       lead_id: leadId, dealer_id,
       scheduled_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -419,7 +330,7 @@ async function processMessage(params: {
     });
   }
 
-  const { data: conv } = await supabase.from("conversations").select("*").eq("id", convId).maybeSingle();
+  const { data: conv } = await supabase.from("conversations").select("*").eq("id", convId).single();
 
   return { success: true, conversation: conv, message: msg, analysis, lead_id: leadId, client_id: clientId };
 }
@@ -441,7 +352,6 @@ Deno.serve(async (req: Request) => {
         message_content: body.message_content,
         conversation_id: body.conversation_id,
         integration_account_id: body.integration_account_id,
-        external_id: body.external_id,
       });
       return new Response(JSON.stringify(result), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -449,11 +359,6 @@ Deno.serve(async (req: Request) => {
     if (action === "analyze_only") {
       const analysis = analyzeMessage(body.message_content || "");
       return new Response(JSON.stringify({ success: true, analysis }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (action === "suggest_reply") {
-      const analysis = analyzeMessage(body.message_content || "");
-      return new Response(JSON.stringify({ success: true, reply_suggestion: analysis.reply_suggestion, next_best_action: analysis.next_best_action, temperature: analysis.temperature }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });

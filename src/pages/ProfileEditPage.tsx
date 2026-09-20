@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, AlertCircle, ImagePlus, X, Store, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useDraftForm } from '@/hooks/useDraftForm';
 
 const states = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
@@ -28,12 +29,32 @@ export function ProfileEditPage() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialized = useRef(false);
+  const draftApplied = useRef(false);
 
-  // Load once when dealer is first available. Using a ref guard prevents the
-  // effect from re-running and wiping the user's edits when the AuthContext
-  // dealer object gets a new reference (e.g. after a token refresh).
+  const draftData = { name, phone, email, whatsapp, cnpj, city, state, address, description, logoUrl, coverUrl };
+  const { restoredData, clearDraft } = useDraftForm('profile-edit-draft', draftData, !loading);
+
+  // Auto-restore draft on mount (before dealer data loads)
+  useEffect(() => {
+    if (!restoredData || draftApplied.current) return;
+    draftApplied.current = true;
+    setName(restoredData.name || '');
+    setPhone(restoredData.phone || '');
+    setEmail(restoredData.email || '');
+    setWhatsapp(restoredData.whatsapp || '');
+    setCnpj(restoredData.cnpj || '');
+    setCity(restoredData.city || '');
+    setState(restoredData.state || '');
+    setAddress(restoredData.address || '');
+    setDescription(restoredData.description || '');
+    if (restoredData.logoUrl) setLogoUrl(restoredData.logoUrl);
+    if (restoredData.coverUrl) setCoverUrl(restoredData.coverUrl);
+  }, [restoredData]);
+
+  // Load dealer data only if no draft was restored
   useEffect(() => {
     if (!dealer || initialized.current) return;
+    if (draftApplied.current) { setLoading(false); return; }
     initialized.current = true;
     setName(dealer.name || '');
     setPhone(dealer.phone || '');
@@ -133,6 +154,7 @@ export function ProfileEditPage() {
     }
 
     await refreshDealer();
+    clearDraft();
     navigate(`/lojista/${dealer.id}`);
     setSaving(false);
   }

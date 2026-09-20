@@ -4,12 +4,10 @@ import {
   ArrowLeft, Pencil, Car, Fuel, Gauge, Cog, Calendar, Palette,
   DoorOpen, FileText, Phone, MapPin, CircleDollarSign,
   TrendingUp, AlertCircle, ShieldCheck, Calculator, X,
-  Globe, RefreshCw, CheckCircle2, Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase, type Vehicle, type Dealer, type VehiclePhoto, type FinancingSimulationWithDetails, type ExternalListing } from '@/lib/supabase';
+import { supabase, type Vehicle, type Dealer, type VehiclePhoto, type FinancingSimulationWithDetails } from '@/lib/supabase';
 import { formatCurrency, formatDate, formatMileage, statusLabel, statusColor } from '@/lib/format';
-import { loadExternalListings, publishToPlatform, unpublishFromPlatform } from '@/lib/integrations';
 
 type VehicleDetails = Vehicle & { dealer: Dealer; photos: VehiclePhoto[] };
 
@@ -391,17 +389,6 @@ export function VehicleDetailPage() {
         </div>
       )}
 
-      {/* External listings / multi-channel publishing (owner only) */}
-      {isOwn && (
-        <div className="mt-8 animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
-          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <div className="w-1 h-5 rounded-full bg-gold-400" style={{ boxShadow: '0 0 8px rgba(245,158,11,0.5)' }} />
-            Publicação Multicanal
-          </h2>
-          <ExternalListingsSection vehicleId={vehicle.id} dealerId={vehicle.dealer_id} isSold={vehicle.status === 'sold'} />
-        </div>
-      )}
-
       {/* Lightbox - full screen image viewer like OLX */}
       {lightboxOpen && photos.length > 0 && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col animate-fade-in" onClick={closeLightbox}>
@@ -464,126 +451,5 @@ function WhatsAppIcon({ size = 20, className = '' }: { size?: number; className?
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
     </svg>
-  );
-}
-
-// === External Listings / Multi-channel Publishing ===
-
-const PLATFORMS = [
-  { id: 'olx', label: 'OLX', color: '#a855f7' },
-  { id: 'instagram', label: 'Instagram', color: '#ec4899' },
-  { id: 'facebook', label: 'Facebook', color: '#1877f2' },
-  { id: 'webmotors', label: 'Webmotors', color: '#f97316' },
-];
-
-function listingStatusInfo(status: string) {
-  switch (status) {
-    case 'published': return { label: 'Publicado', color: 'text-success-400', dot: 'bg-success-500' };
-    case 'syncing': return { label: 'Sincronizando', color: 'text-warning-400', dot: 'bg-warning-500' };
-    case 'error': return { label: 'Erro', color: 'text-error-400', dot: 'bg-error-500' };
-    case 'paused': return { label: 'Pausado', color: 'text-navy-300', dot: 'bg-navy-500' };
-    case 'sold_removed': return { label: 'Removido (vendido)', color: 'text-navy-300', dot: 'bg-navy-600' };
-    default: return { label: 'Não publicado', color: 'text-navy-400', dot: 'bg-navy-600' };
-  }
-}
-
-function ExternalListingsSection({ vehicleId, dealerId, isSold }: { vehicleId: string; dealerId: string; isSold: boolean }) {
-  const [listings, setListings] = useState<ExternalListing[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  async function load() {
-    setLoading(true);
-    const data = await loadExternalListings(vehicleId);
-    setListings(data);
-    setLoading(false);
-  }
-
-  useEffect(() => { load(); }, [vehicleId]);
-
-  async function handlePublish(platform: string) {
-    setActionLoading(platform);
-    await publishToPlatform(dealerId, vehicleId, platform, null);
-    await load();
-    setActionLoading(null);
-  }
-
-  async function handleUnpublish(platform: string) {
-    setActionLoading('unpub_' + platform);
-    await unpublishFromPlatform(vehicleId, platform);
-    await load();
-    setActionLoading(null);
-  }
-
-  async function handleSoldRemoveAll() {
-    setActionLoading('sold');
-    for (const l of listings.filter((l) => l.status === 'published' || l.status === 'syncing')) {
-      await supabase.from('external_listings').update({ status: 'sold_removed', updated_at: new Date().toISOString() }).eq('id', l.id);
-    }
-    await load();
-    setActionLoading(null);
-  }
-
-  if (loading) {
-    return <div className="glass-card rounded-2xl p-6 flex justify-center"><Loader2 size={20} className="animate-spin text-navy-400" /></div>;
-  }
-
-  return (
-    <div className="glass-card rounded-2xl p-5">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {PLATFORMS.map((p) => {
-          const listing = listings.find((l) => l.platform === p.id);
-          const status = listing?.status || 'not_published';
-          const info = listingStatusInfo(status);
-          const isLoading = actionLoading === p.id;
-          return (
-            <div key={p.id} className="glass rounded-xl p-3 border border-navy-600/30">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white" style={{ background: p.color + '30', border: `1px solid ${p.color}40` }}>
-                    <span style={{ color: p.color }}>{p.label.charAt(0)}</span>
-                  </div>
-                  <span className="text-sm font-medium text-white">{p.label}</span>
-                </div>
-                <span className={`w-2 h-2 rounded-full ${info.dot}`} />
-              </div>
-              <p className={`text-xs font-medium ${info.color} mb-2`}>{info.label}</p>
-              {listing?.last_error && <p className="text-[10px] text-error-400 mb-2">{listing.last_error}</p>}
-              {listing?.external_url && <a href={listing.external_url} target="_blank" rel="noopener" className="text-[10px] text-accent-400 hover:underline flex items-center gap-1 mb-2"><Globe size={10} /> Ver anúncio</a>}
-              <div className="flex gap-1.5">
-                {status === 'not_published' || status === 'paused' || status === 'sold_removed' ? (
-                  <button onClick={() => handlePublish(p.id)} disabled={isLoading || isSold}
-                    className="flex-1 text-[10px] px-2 py-1.5 rounded-lg bg-accent-500/15 hover:bg-accent-500/25 text-accent-300 font-medium transition-all disabled:opacity-40 flex items-center justify-center gap-1">
-                    {isLoading ? <Loader2 size={10} className="animate-spin" /> : <Globe size={10} />} Publicar
-                  </button>
-                ) : (
-                  <button onClick={() => handleUnpublish(p.id)} disabled={isLoading}
-                    className="flex-1 text-[10px] px-2 py-1.5 rounded-lg bg-navy-700/40 hover:bg-navy-600/40 text-navy-200 font-medium transition-all flex items-center justify-center gap-1">
-                    {isLoading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} Pausar
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {isSold && listings.some((l) => l.status === 'published' || l.status === 'syncing') && (
-        <div className="mt-4 glass rounded-xl p-3 border border-warning-500/20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={16} className="text-warning-400" />
-            <p className="text-xs text-navy-200">Este veículo foi vendido mas ainda tem anúncios ativos. Remova-os das plataformas.</p>
-          </div>
-          <button onClick={handleSoldRemoveAll} disabled={actionLoading === 'sold'}
-            className="text-xs px-3 py-1.5 rounded-lg bg-warning-500/20 hover:bg-warning-500/30 text-warning-400 font-medium transition-all flex items-center gap-1">
-            {actionLoading === 'sold' ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Remover todos
-          </button>
-        </div>
-      )}
-
-      <p className="text-[10px] text-navy-500 mt-3 flex items-center gap-1">
-        <Globe size={10} /> A publicação real depende de credenciais e aprovação de cada plataforma. Conecte suas contas em Integrações.
-      </p>
-    </div>
   );
 }

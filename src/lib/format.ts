@@ -42,7 +42,15 @@ export function statusLabel(status: string): string {
     rejected: 'Recusada',
     expired: 'Expirada',
     converted: 'Convertida em venda',
+    created: 'Criada na Credere',
+    failed: 'Falhou',
+    no_results: 'Sem resultados',
     pending: 'Pendente',
+    draft_atpv: 'Rascunho',
+    ready_atpv: 'Pronto para envio',
+    submitted_atpv: 'Enviado ao Detran',
+    completed_atpv: 'Transferência concluída',
+    cancelled_atpv: 'Cancelado',
   };
   return labels[status] || status;
 }
@@ -64,7 +72,15 @@ export function statusColor(status: string): string {
     rejected: 'bg-error-500/15 text-error-400 border-error-500/30',
     expired: 'bg-navy-600/30 text-navy-300 border-navy-500/30',
     converted: 'bg-success-500/15 text-success-400 border-success-500/30',
+    created: 'bg-accent-500/15 text-accent-400 border-accent-500/30',
+    failed: 'bg-error-500/15 text-error-400 border-error-500/30',
+    no_results: 'bg-navy-600/30 text-navy-300 border-navy-500/30',
     pending: 'bg-warning-500/15 text-warning-400 border-warning-500/30',
+    draft_atpv: 'bg-navy-600/30 text-navy-200 border-navy-500/30',
+    ready_atpv: 'bg-accent-500/15 text-accent-400 border-accent-500/30',
+    submitted_atpv: 'bg-warning-500/15 text-warning-400 border-warning-500/30',
+    completed_atpv: 'bg-success-500/15 text-success-400 border-success-500/30',
+    cancelled_atpv: 'bg-error-500/15 text-error-400 border-error-500/30',
   };
   return colors[status] || 'bg-navy-600/30 text-navy-200 border-navy-500/30';
 }

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Loader2, ImagePlus, X, AlertCircle, Car } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type Vehicle, type VehiclePhoto } from '@/lib/supabase';
+import { useDraftForm } from '@/hooks/useDraftForm';
 
 type FormData = {
   brand: string;
@@ -48,6 +49,18 @@ export function VehicleFormPage() {
   const [uploading, setUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
+  const appliedDraft = useRef(false);
+
+  const draftKey = `vehicle-form-draft${isEdit ? `-${id}` : ''}`;
+  const { restoredData, clearDraft } = useDraftForm(draftKey, form, !isEdit || !loading);
+
+  // Auto-restore draft when available (new form or edit form that finished loading)
+  useEffect(() => {
+    if (!restoredData || appliedDraft.current) return;
+    if (isEdit && loading) return;
+    appliedDraft.current = true;
+    setForm(restoredData);
+  }, [restoredData, isEdit, loading]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -242,6 +255,8 @@ export function VehicleFormPage() {
       status: form.status,
       updated_at: new Date().toISOString(),
     };
+
+    clearDraft();
 
     if (isEdit) {
       const { error: updateErr } = await supabase.from('vehicles').update(payload).eq('id', id!);

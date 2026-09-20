@@ -2,14 +2,13 @@ import { useState, useEffect } from 'react';
 import {
   X, CheckCircle2, RefreshCw, Zap, AlertCircle, Clock, Sparkles,
   MessageCircle, Camera, Globe, Link2, Key, ExternalLink,
-  Loader2, Copy, Check, ChevronDown, ChevronUp, Phone, Activity,
+  Loader2, Copy, Check, ChevronDown, ChevronUp, Phone,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type Integration, type IntegrationAccount } from '@/lib/supabase';
 import {
   connectWhatsAppCloud, connectMetaSocial, connectOLX, connectWebmotors,
   disconnectAccount, syncConversations, getWebhookUrl,
-  getIntegrationHealth, type IntegrationHealth,
 } from '@/lib/integrations';
 import { IntegrationHelpChat } from '@/components/IntegrationHelpChat';
 
@@ -234,9 +233,6 @@ export function IntegrationsPage() {
           </div>
         </div>
       )}
-
-      {/* === Integration Health === */}
-      <IntegrationHealthSection dealerId={dealer?.id || ''} />
 
       {/* Integration cards */}
       {loading ? (
@@ -856,72 +852,6 @@ function Field({ label, icon, value, onChange, placeholder, textarea = false, he
         )}
       </div>
       {help && <p className="text-[10px] text-navy-500 mt-1 ml-1 flex items-center gap-1"><Sparkles size={10} className="text-gold-500/50" /> {help}</p>}
-    </div>
-  );
-}
-
-// === Integration Health Section ===
-
-function IntegrationHealthSection({ dealerId }: { dealerId: string }) {
-  const [health, setHealth] = useState<IntegrationHealth[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    if (!dealerId) return;
-    setLoading(true);
-    const data = await getIntegrationHealth(dealerId);
-    setHealth(data);
-    setLoading(false);
-  }
-
-  useEffect(() => { load(); }, [dealerId]);
-
-  const healthIcon = (status: IntegrationHealth['status']) => {
-    if (status === 'connected') return <span className="w-2.5 h-2.5 rounded-full bg-success-500 inline-block" />;
-    if (status === 'error') return <span className="w-2.5 h-2.5 rounded-full bg-error-500 inline-block" />;
-    if (status === 'pending_auth') return <span className="w-2.5 h-2.5 rounded-full bg-warning-500 inline-block" />;
-    return <span className="w-2.5 h-2.5 rounded-full bg-navy-500 inline-block" />;
-  };
-
-  const healthLabel = (status: IntegrationHealth['status']) => {
-    if (status === 'connected') return 'Funcionando';
-    if (status === 'error') return 'Erro';
-    if (status === 'pending_auth') return 'Requer autorização';
-    return 'Não conectado';
-  };
-
-  const healthColor = (status: IntegrationHealth['status']) => {
-    if (status === 'connected') return 'text-success-400';
-    if (status === 'error') return 'text-error-400';
-    if (status === 'pending_auth') return 'text-warning-400';
-    return 'text-navy-400';
-  };
-
-  return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Activity size={18} className="text-accent-400" />
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Saúde das Integrações</h2>
-        </div>
-        <button onClick={load} className="text-xs text-navy-400 hover:text-white flex items-center gap-1 transition-colors">
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Atualizar
-        </button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {health.map((h) => (
-          <div key={h.platform} className="glass-card rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-white capitalize">{h.platform}</span>
-              {healthIcon(h.status)}
-            </div>
-            <p className={`text-xs font-semibold ${healthColor(h.status)}`}>{healthLabel(h.status)}</p>
-            {h.lastSyncAt && <p className="text-[10px] text-navy-500 mt-1">Última sync: {new Date(h.lastSyncAt).toLocaleDateString('pt-BR')}</p>}
-            {h.lastError && <p className="text-[10px] text-error-400 mt-1">{h.lastError}</p>}
-            {h.recommendedAction && <p className="text-[10px] text-warning-400 mt-1">{h.recommendedAction}</p>}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

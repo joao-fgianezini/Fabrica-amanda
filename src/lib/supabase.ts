@@ -24,6 +24,7 @@ export type Dealer = {
   description: string | null;
   cnpj: string | null;
   whatsapp: string | null;
+  credere_store_id: string | null;
   created_at: string;
 };
 
@@ -139,6 +140,8 @@ export type ClientRecord = {
   address: string | null;
   notes: string | null;
   status: 'active' | 'inactive';
+  credere_lead_id: string | null;
+  credere_synced_at: string | null;
   created_at: string;
 };
 
@@ -166,6 +169,12 @@ export type FinancingSimulation = {
   status: FinancingSimulationStatus;
   consent_given: boolean;
   notes: string | null;
+  credere_simulation_uuid: string | null;
+  provider: string | null;
+  raw_response: Record<string, unknown> | null;
+  licensing_uf: string | null;
+  licensing_city: string | null;
+  seller_cpf: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -173,7 +182,8 @@ export type FinancingSimulation = {
 export type FinancingSimulationStatus =
   | 'draft' | 'submitted' | 'processing' | 'analysis'
   | 'approved' | 'approved_with_condition' | 'rejected'
-  | 'expired' | 'cancelled' | 'converted';
+  | 'expired' | 'cancelled' | 'converted'
+  | 'created' | 'completed' | 'failed' | 'no_results';
 
 export type FinancingOffer = {
   id: string;
@@ -200,6 +210,33 @@ export type FinancingSimulationWithDetails = FinancingSimulation & {
   vehicle?: Pick<Vehicle, 'id' | 'brand' | 'model' | 'year_model' | 'year_manufacture' | 'asking_price'> | null;
   client?: Pick<ClientRecord, 'id' | 'name' | 'phone' | 'document'> | null;
   offers?: FinancingOfferWithInstitution[];
+  credere_conditions?: CredereConditionRow[];
+};
+
+export type CredereConditionRow = {
+  id: string;
+  simulation_id: string;
+  dealer_id: string;
+  provider: string;
+  bank_id: string | null;
+  bank_name: string | null;
+  bank_nickname: string | null;
+  bank_febraban_code: string | null;
+  provider_condition_id: string | null;
+  installments: number | null;
+  down_payment_cents: number | null;
+  financed_amount_cents: number | null;
+  amount_paid_in_financing_cents: number | null;
+  bank_down_payment_suggestion_cents: number | null;
+  expenses: Record<string, unknown> | null;
+  reason: string | null;
+  run_pre_approval: boolean;
+  pre_approval_status: string | null;
+  process_condition_payload: Record<string, unknown> | null;
+  raw_response: Record<string, unknown> | null;
+  is_selected: boolean;
+  selected_at: string | null;
+  created_at: string;
 };
 
 // === CRM TYPES ===
@@ -267,6 +304,47 @@ export type LeadFollowUp = {
   created_at: string;
 };
 
+// === DEALER SITE TYPES ===
+
+export type SiteTemplate = 'classic' | 'modern' | 'luxury' | 'sport' | 'minimal' | 'dark' | 'magazine' | 'highway';
+
+export type SiteSocialLinks = {
+  instagram?: string;
+  facebook?: string;
+  whatsapp?: string;
+  youtube?: string;
+  tiktok?: string;
+};
+
+export type SiteData = {
+  heroTitle?: string;
+  heroSubtitle?: string;
+  heroImage?: string;
+  aboutTitle?: string;
+  aboutText?: string;
+  aboutImage?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  showAboutSection?: boolean;
+  showStatsSection?: boolean;
+  showContactSection?: boolean;
+  showSocialLinks?: boolean;
+  customFooterText?: string;
+  social?: SiteSocialLinks;
+};
+
+export type DealerSite = {
+  id: string;
+  dealer_id: string;
+  template: SiteTemplate;
+  slug: string;
+  is_published: boolean;
+  site_data: SiteData;
+  custom_domain: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // === INTEGRATION TYPES ===
 
 export type Integration = {
@@ -307,8 +385,6 @@ export type IntegrationAccount = {
   integration?: Integration;
 };
 
-export type ConversationTemperature = 'hot' | 'warm' | 'cold' | null;
-
 export type Conversation = {
   id: string;
   dealer_id: string;
@@ -328,31 +404,12 @@ export type Conversation = {
   ai_sentiment: 'positive' | 'neutral' | 'negative' | null;
   ai_intent: string | null;
   ai_qualified: boolean;
-  ai_temperature: ConversationTemperature;
-  vehicle_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type ConversationWithLead = Conversation & {
   lead?: Lead | null;
-  vehicle?: Pick<Vehicle, 'id' | 'brand' | 'model' | 'year_model' | 'asking_price'> | null;
-};
-
-export type ExternalListing = {
-  id: string;
-  dealer_id: string;
-  vehicle_id: string;
-  integration_account_id: string | null;
-  platform: string;
-  external_listing_id: string | null;
-  external_url: string | null;
-  status: 'published' | 'syncing' | 'error' | 'not_published' | 'paused' | 'sold_removed';
-  last_sync_at: string | null;
-  last_error: string | null;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
 };
 
 export type Message = {
@@ -379,6 +436,37 @@ export type Message = {
     [key: string]: unknown;
   };
   created_at: string;
+};
+
+// === ATPV-E TYPES ===
+
+export type AtpvEStatus = 'draft' | 'ready' | 'submitted' | 'completed' | 'cancelled';
+
+export type AtpvERecord = {
+  id: string;
+  dealer_id: string;
+  vehicle_id: string | null;
+  sale_id: string | null;
+  buyer_name: string;
+  buyer_cpf_cnpj: string | null;
+  buyer_phone: string | null;
+  buyer_address: string | null;
+  buyer_city: string | null;
+  buyer_state: string | null;
+  sale_price: number | null;
+  sale_date: string | null;
+  vehicle_plate: string | null;
+  vehicle_chassis: string | null;
+  vehicle_renavam: string | null;
+  status: AtpvEStatus;
+  detran_protocol: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AtpvEWithVehicle = AtpvERecord & {
+  vehicle?: Pick<Vehicle, 'id' | 'brand' | 'model' | 'year_model' | 'year_manufacture' | 'plate' | 'chassis' | 'asking_price'> | null;
 };
 
 export type LeadTrackingEvent = {

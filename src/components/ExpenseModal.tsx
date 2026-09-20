@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Loader2, AlertCircle, Tag } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type ExpenseCategory } from '@/lib/supabase';
+import { useDraftForm } from '@/hooks/useDraftForm';
 
 type Props = {
   expense?: { id: string; description: string; amount: number; category_id: string | null; due_date: string | null; paid_date: string | null; status: string; recurrence: string; is_fixed: boolean; notes: string | null } | null;
@@ -27,6 +28,24 @@ export function ExpenseModal({ expense, categories, onClose, onSaved }: Props) {
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('#2a93e8');
+  const draftApplied = useRef(false);
+
+  const draftData = { description, amount, categoryId, dueDate, paidDate, status, recurrence, isFixed, notes };
+  const { restoredData, clearDraft } = useDraftForm('expense-modal-draft', draftData, !isEdit);
+
+  // Auto-restore draft for new expenses only
+  useEffect(() => {
+    if (!restoredData || draftApplied.current || isEdit) return;
+    draftApplied.current = true;
+    if (restoredData.description) setDescription(restoredData.description);
+    if (restoredData.amount) setAmount(restoredData.amount);
+    if (restoredData.categoryId) setCategoryId(restoredData.categoryId);
+    if (restoredData.dueDate) setDueDate(restoredData.dueDate);
+    if (restoredData.status) setStatus(restoredData.status);
+    if (restoredData.recurrence) setRecurrence(restoredData.recurrence);
+    if (typeof restoredData.isFixed === 'boolean') setIsFixed(restoredData.isFixed);
+    if (restoredData.notes) setNotes(restoredData.notes);
+  }, [restoredData, isEdit]);
 
   async function handleSaveCategory() {
     if (!dealer || !newCatName.trim()) return;
@@ -80,6 +99,7 @@ export function ExpenseModal({ expense, categories, onClose, onSaved }: Props) {
     }
 
     setSaving(false);
+    clearDraft();
     onSaved();
   }
 

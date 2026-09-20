@@ -19,6 +19,10 @@ import { AtendimentoPage } from '@/pages/AtendimentoPage';
 import { IntegrationsPage } from '@/pages/IntegrationsPage';
 import { IntegrationsCallbackPage } from '@/pages/IntegrationsCallbackPage';
 import { InboxPage } from '@/pages/InboxPage';
+import { SiteBuilderPage } from '@/pages/SiteBuilderPage';
+import { PublicSitePage } from '@/pages/PublicSitePage';
+import { AtpvEPage } from '@/pages/AtpvEPage';
+import { ConsultaInteligentePage } from '@/pages/ConsultaInteligentePage';
 import { Loader2 } from 'lucide-react';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -68,6 +72,10 @@ function AppRoutes() {
       <Route path="/financiamento/:id" element={<ProtectedRoute><FinancingDetailPage /></ProtectedRoute>} />
       <Route path="/lojista/:id" element={<ProtectedRoute><DealerProfilePage /></ProtectedRoute>} />
       <Route path="/perfil/editar" element={<ProtectedRoute><ProfileEditPage /></ProtectedRoute>} />
+      <Route path="/meu-site" element={<ProtectedRoute><SiteBuilderPage /></ProtectedRoute>} />
+      <Route path="/atpv-e" element={<ProtectedRoute><AtpvEPage /></ProtectedRoute>} />
+      <Route path="/consulta-inteligente" element={<ProtectedRoute><ConsultaInteligentePage /></ProtectedRoute>} />
+      <Route path="/site/:slug" element={<PublicSitePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

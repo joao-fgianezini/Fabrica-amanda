@@ -18,7 +18,7 @@ export function FinancingPage() {
       if (!dealer) return;
       const { data, error } = await supabase
         .from('financing_simulations')
-        .select(`*, vehicle:vehicles(id, brand, model, year_model, year_manufacture, asking_price), client:clients(id, name, phone, document), offers:financing_offers(*, institution:financing_institutions(*))`)
+        .select(`*, vehicle:vehicles(id, brand, model, year_model, year_manufacture, asking_price), client:clients(id, name, phone, document), offers:financing_offers(*, institution:financing_institutions(*)), credere_conditions:credere_conditions(*)`)
         .eq('dealer_id', dealer.id)
         .order('created_at', { ascending: false });
       if (error) { console.error(error); }
@@ -161,8 +161,11 @@ export function FinancingPage() {
         <div className="space-y-3">
           {filtered.map((sim, i) => {
             const offers = sim.offers || [];
-            const approvedOffers = offers.filter((o) => o.status === 'approved' || o.status === 'approved_with_condition');
+            const credereConditions = sim.credere_conditions || [];
+            const allConditions = [...offers, ...credereConditions];
+            const selectedCondition = credereConditions.find(c => c.is_selected);
             const bestOffer = offers.find((o) => o.is_best);
+            const resultsCount = allConditions.length;
             return (
               <div
                 key={sim.id}
@@ -204,6 +207,18 @@ export function FinancingPage() {
                       <div className="text-right">
                         <p className="text-xs text-navy-400">Melhor parcela</p>
                         <p className="text-sm font-bold text-success-400">{formatCurrency(bestOffer.installment_amount || 0)}</p>
+                      </div>
+                    )}
+                    {resultsCount > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-navy-400">Resultados</p>
+                        <p className="text-sm font-bold text-white">{resultsCount}</p>
+                      </div>
+                    )}
+                    {selectedCondition && (
+                      <div className="text-right">
+                        <p className="text-xs text-navy-400">Banco</p>
+                        <p className="text-sm font-bold text-accent-400 truncate max-w-28">{selectedCondition.bank_nickname || selectedCondition.bank_name}</p>
                       </div>
                     )}
                     <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${statusColor(sim.status)}`}>

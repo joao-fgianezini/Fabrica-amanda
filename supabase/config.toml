@@ -1,0 +1,26 @@
+[functions.ai-help-chat]
+verify_jwt = true
+
+[functions.ai-lead-qualifier]
+verify_jwt = true
+
+[functions.connect-social]
+verify_jwt = true
+
+[functions.financing-simulator]
+verify_jwt = true
+
+[functions.platform-webhook]
+verify_jwt = false
+
+[functions.send-message]
+verify_jwt = true
+
+[functions.vehicle-lookup]
+verify_jwt = true
+
+[functions.credere-api]
+verify_jwt = true
+
+[functions.credere-webhook]
+verify_jwt = false

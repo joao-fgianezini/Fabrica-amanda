@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Car, Search, LogOut, Menu, X, Wallet, TrendingUp, Users, Calculator, Store, Zap, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Car, Search, LogOut, Menu, X, Wallet, TrendingUp, Users, Calculator, Store, Zap, MessageSquare, Globe, FileText, Sparkles } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '@/context/AuthContext';
 
@@ -14,7 +14,9 @@ const navSections = [
       { to: '/financeiro', label: 'Financeiro', icon: Wallet },
       { to: '/financiamento', label: 'Financiamento', icon: Calculator },
       { to: '/clientes', label: 'Clientes', icon: Users },
-      { to: '/atendimento', label: 'Atendimento 360°', icon: MessageSquare },
+      { to: '/atpv-e', label: 'ATPV-e', icon: FileText },
+      { to: '/consulta-inteligente', label: 'Consulta Inteligente', icon: Sparkles },
+      { to: '/atendimento', label: 'Atendimento', icon: MessageSquare },
     ],
   },
   {
@@ -27,6 +29,7 @@ const navSections = [
     title: 'Rede',
     items: [
       { to: '/rede', label: 'Buscar na Rede', icon: Search },
+      { to: '/meu-site', label: 'Meu Site', icon: Globe },
       { to: '/perfil/editar', label: 'Meu Perfil', icon: Store },
     ],
   },

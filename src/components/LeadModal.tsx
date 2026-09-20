@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { X, Save, MessageSquare, Phone, Mail, User, Car, Tag, DollarSign } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type LeadSource, type LeadStatus, type Lead, type Vehicle, type ClientRecord } from '@/lib/supabase';
 import { LEAD_SOURCES, PIPELINE_STAGES } from '@/lib/crm';
 import { formatCurrency } from '@/lib/format';
+import { useDraftForm } from '@/hooks/useDraftForm';
 
 type Props = {
   lead?: Lead | null;
@@ -31,6 +32,30 @@ export function LeadModal({ lead, onClose, onSaved }: Props) {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const draftApplied = useRef(false);
+  const isEditMode = !!lead;
+
+  const draftData = { name, phone, email, source, sourceDetail, status, leadScore, vehicleId, clientId, budget, downPayment, maxInstallment, notes, assignedTo };
+  const { restoredData, clearDraft } = useDraftForm('lead-modal-draft', draftData, !isEditMode);
+
+  // Auto-restore draft for new leads only
+  useEffect(() => {
+    if (!restoredData || draftApplied.current || isEditMode) return;
+    draftApplied.current = true;
+    if (restoredData.name) setName(restoredData.name);
+    if (restoredData.phone) setPhone(restoredData.phone);
+    if (restoredData.email) setEmail(restoredData.email);
+    if (restoredData.source) setSource(restoredData.source);
+    if (restoredData.sourceDetail) setSourceDetail(restoredData.sourceDetail);
+    if (restoredData.status) setStatus(restoredData.status);
+    if (typeof restoredData.leadScore === 'number') setLeadScore(restoredData.leadScore);
+    if (restoredData.vehicleId) setVehicleId(restoredData.vehicleId);
+    if (restoredData.budget) setBudget(restoredData.budget);
+    if (restoredData.downPayment) setDownPayment(restoredData.downPayment);
+    if (restoredData.maxInstallment) setMaxInstallment(restoredData.maxInstallment);
+    if (restoredData.notes) setNotes(restoredData.notes);
+    if (restoredData.assignedTo) setAssignedTo(restoredData.assignedTo);
+  }, [restoredData, isEditMode]);
 
   useEffect(() => {
     if (!dealer) return;
@@ -102,6 +127,7 @@ export function LeadModal({ lead, onClose, onSaved }: Props) {
     }
 
     if (result.error) { setError(result.error.message); setSaving(false); return; }
+    clearDraft();
     setSaving(false);
     onSaved();
   }
