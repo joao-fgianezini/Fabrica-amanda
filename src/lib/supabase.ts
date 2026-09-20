@@ -410,6 +410,22 @@ export type Conversation = {
 
 export type ConversationWithLead = Conversation & {
   lead?: Lead | null;
+  commercial_status?: 'novo' | 'em_atendimento' | 'aguardando_cliente' | 'proposta_enviada' | 'ganho' | 'perdido';
+  vehicle?: {
+    id?: string;
+    brand: string;
+    model: string;
+    year_model?: number | null;
+    year_manufacture?: number | null;
+    asking_price?: number | null;
+    color?: string | null;
+    plate?: string | null;
+    mileage?: number | null;
+    fuel?: string | null;
+    transmission?: string | null;
+    status?: 'available' | 'reserved' | 'sold' | string;
+    cover_url?: string | null;
+  } | null;
 };
 
 export type Message = {
