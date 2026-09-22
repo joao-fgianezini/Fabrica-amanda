@@ -118,9 +118,7 @@ export function AtendimentoPage() {
     if (localDemo && localDemo.length > 0) {
       setConversations(localDemo);
       setIsDemoMode(true);
-      if (!selected && localDemo.length > 0) {
-        setSelected(localDemo[0]);
-      }
+      setSelected((prev) => prev || localDemo[0]);
       setLoading(false);
       return;
     }
@@ -135,7 +133,7 @@ export function AtendimentoPage() {
       if (!error && data && data.length > 0) {
         setConversations(data as UnifiedConversation[]);
         setIsDemoMode(false);
-        if (!selected) setSelected(data[0] as UnifiedConversation);
+        setSelected((prev) => prev || (data[0] as UnifiedConversation));
       } else {
         // If empty in database, initialize demo conversations for a great immediate experience
         handleLoadDemo(dealer.id);
@@ -145,7 +143,7 @@ export function AtendimentoPage() {
     } finally {
       setLoading(false);
     }
-  }, [dealer, selected]);
+  }, [dealer?.id]);
 
   function handleLoadDemo(dealerId: string) {
     const { conversations: demoConvs, messagesMap } = generateMultichannelDemo(dealerId);
@@ -190,19 +188,17 @@ export function AtendimentoPage() {
           acompanhamentosHoje: count || 0,
         });
       } else {
-        // Stats based on current conversations
-        const demoLeads = conversations.map((c) => c.lead).filter(Boolean);
         setLeadStats({
-          total: demoLeads.length,
-          quentes: demoLeads.filter((l) => (l?.lead_score || 0) >= 80).length,
-          vendidos: demoLeads.filter((l) => l?.status === 'won').length,
+          total: 5,
+          quentes: 3,
+          vendidos: 1,
           acompanhamentosHoje: 1,
         });
       }
     } catch {
       // Ignore in offline mode
     }
-  }, [dealer, conversations]);
+  }, [dealer?.id]);
 
   useEffect(() => {
     loadConversations();
