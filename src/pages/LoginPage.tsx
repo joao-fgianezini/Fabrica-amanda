@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/components/Logo';
 
 export function LoginPage() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInAsGuest } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -233,6 +233,24 @@ export function LoginPage() {
                 )}
               </button>
             </form>
+
+            {/* Quick Test Demo Account Button */}
+            <div className="mt-5 pt-5 border-t border-navy-700/50">
+              <button
+                type="button"
+                onClick={() => {
+                  signInAsGuest();
+                  navigate('/atendimento');
+                }}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-gold-500/20 via-accent-500/20 to-gold-500/20 hover:from-gold-500/30 hover:to-accent-500/30 text-gold-300 border border-gold-500/40 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md group"
+              >
+                <Sparkles size={15} className="text-gold-400 group-hover:rotate-12 transition-transform" />
+                <span>Entrar Direto com Conta de Teste (Marcelo M3Car)</span>
+              </button>
+              <p className="text-[11px] text-navy-400 text-center mt-2">
+                Ou use: <span className="text-white font-mono bg-navy-800 px-1.5 py-0.5 rounded">teste@redeauto.com</span> · Senha: <span className="text-white font-mono bg-navy-800 px-1.5 py-0.5 rounded">123456</span>
+              </p>
+            </div>
 
             <div className="mt-6 text-center text-sm relative z-10">
               <button
