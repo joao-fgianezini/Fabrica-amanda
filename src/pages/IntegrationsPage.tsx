@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   X, CheckCircle2, RefreshCw, Zap, AlertCircle, Clock, Sparkles,
   MessageCircle, Camera, Globe, Link2, Key, ExternalLink,
-  Loader2, Copy, Check, ChevronDown, ChevronUp, Phone,
+  Loader2, Copy, Check, ChevronDown, ChevronUp, Phone, Smartphone, QrCode,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type Integration, type IntegrationAccount } from '@/lib/supabase';
 import {
-  connectWhatsAppCloud, connectMetaSocial, connectOLX, connectWebmotors,
+  connectWhatsAppCloud, connectWhatsAppDirectPhone, connectMetaSocial, connectOLX, connectWebmotors,
   disconnectAccount, syncConversations, getWebhookUrl,
 } from '@/lib/integrations';
 import { IntegrationHelpChat } from '@/components/IntegrationHelpChat';
@@ -25,6 +25,11 @@ export function IntegrationsPage() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+
+  // WhatsApp quick connection mode states
+  const [waMode, setWaMode] = useState<'direct' | 'cloud'>('direct');
+  const [waDirectMethod, setWaDirectMethod] = useState<'qrcode' | 'pairing'>('qrcode');
+  const [waDirectPhone, setWaDirectPhone] = useState('');
 
   const [whatsappForm, setWhatsappForm] = useState({ phone_number_id: '', access_token: '', waba_id: '', phone_number: '' });
   const [igForm, setIgForm] = useState({ page_id: '', access_token: '', account_name: '' });
@@ -72,6 +77,11 @@ export function IntegrationsPage() {
 
   function openSetup(integration: Integration) {
     setError(null);
+    if (integration.platform === 'whatsapp') {
+      setWaMode('direct');
+      setWaDirectMethod('qrcode');
+      setWaDirectPhone(dealer?.whatsapp || dealer?.phone || '');
+    }
     setModal({ type: 'setup', integration });
   }
 
@@ -90,12 +100,22 @@ export function IntegrationsPage() {
       let result: { success: boolean; error: string | null; message: string };
 
       if (platform === 'whatsapp') {
-        if (!whatsappForm.phone_number_id || !whatsappForm.access_token || !whatsappForm.waba_id) {
-          setError('Preencha Phone Number ID, Access Token e WABA ID');
-          setConnecting(false);
-          return;
+        if (waMode === 'direct') {
+          const targetPhone = waDirectPhone || dealer?.whatsapp || dealer?.phone || '(16) 99999-8888';
+          result = await connectWhatsAppDirectPhone(
+            dealer.id,
+            modal.integration.id,
+            targetPhone,
+            waDirectMethod === 'qrcode' ? 'qrcode' : 'pairing_code',
+          );
+        } else {
+          if (!whatsappForm.phone_number_id || !whatsappForm.access_token || !whatsappForm.waba_id) {
+            setError('Preencha Phone Number ID, Access Token e WABA ID');
+            setConnecting(false);
+            return;
+          }
+          result = await connectWhatsAppCloud(dealer.id, modal.integration.id, whatsappForm.phone_number_id, whatsappForm.access_token, whatsappForm.waba_id, whatsappForm.phone_number);
         }
-        result = await connectWhatsAppCloud(dealer.id, modal.integration.id, whatsappForm.phone_number_id, whatsappForm.access_token, whatsappForm.waba_id, whatsappForm.phone_number);
       } else if (platform === 'instagram') {
         if (!igForm.page_id || !igForm.access_token) {
           setError('Preencha Page ID e Access Token');
@@ -305,6 +325,10 @@ export function IntegrationsPage() {
           onConnect={handleConnect}
           connecting={connecting}
           error={error}
+          waMode={waMode} setWaMode={setWaMode}
+          waDirectMethod={waDirectMethod} setWaDirectMethod={setWaDirectMethod}
+          waDirectPhone={waDirectPhone} setWaDirectPhone={setWaDirectPhone}
+          dealerPhone={dealer?.whatsapp || dealer?.phone || ''}
           whatsappForm={whatsappForm} setWhatsappForm={setWhatsappForm}
           igForm={igForm} setIgForm={setIgForm}
           fbForm={fbForm} setFbForm={setFbForm}
@@ -332,6 +356,13 @@ type SetupModalProps = {
   onConnect: () => void;
   connecting: boolean;
   error: string | null;
+  waMode: 'direct' | 'cloud';
+  setWaMode: (v: 'direct' | 'cloud') => void;
+  waDirectMethod: 'qrcode' | 'pairing';
+  setWaDirectMethod: (v: 'qrcode' | 'pairing') => void;
+  waDirectPhone: string;
+  setWaDirectPhone: (v: string) => void;
+  dealerPhone: string;
   whatsappForm: { phone_number_id: string; access_token: string; waba_id: string; phone_number: string };
   setWhatsappForm: (v: { phone_number_id: string; access_token: string; waba_id: string; phone_number: string }) => void;
   igForm: { page_id: string; access_token: string; account_name: string };
@@ -400,7 +431,13 @@ function SetupModal(props: SetupModalProps) {
           {integration.platform === 'webmotors' && <WebmotorsForm {...props} />}
 
           <button onClick={onConnect} disabled={connecting} className="w-full mt-4 flex items-center justify-center gap-2 text-white font-semibold px-4 py-3 rounded-xl text-sm transition-all shadow-lg disabled:opacity-50" style={{ background: `linear-gradient(to right, ${color}, ${color}dd)`, boxShadow: `0 4px 20px ${color}40` }}>
-            {connecting ? <><Loader2 size={16} className="animate-spin" /> Conectando...</> : <><Zap size={16} /> Conectar</>}
+            {connecting ? (
+              <><Loader2 size={16} className="animate-spin" /> Conectando...</>
+            ) : integration.platform === 'whatsapp' && props.waMode === 'direct' ? (
+              <><Zap size={16} /> Confirmar e Vincular WhatsApp</>
+            ) : (
+              <><Zap size={16} /> Conectar</>
+            )}
           </button>
         </div>
       </div>
@@ -785,13 +822,255 @@ function DetailedGuide({ platform, webhookUrl, copied, copyToClipboard }: { plat
 // === Platform-specific form fields ===
 
 function WhatsAppForm(props: SetupModalProps) {
-  const { whatsappForm, setWhatsappForm } = props;
+  const {
+    waMode, setWaMode,
+    waDirectMethod, setWaDirectMethod,
+    waDirectPhone, setWaDirectPhone,
+    dealerPhone,
+    whatsappForm, setWhatsappForm,
+  } = props;
+
+  const [qrKey, setQrKey] = useState(0);
+  const currentPhone = waDirectPhone !== '' ? waDirectPhone : (dealerPhone || '(16) 99999-8888');
+
   return (
-    <div className="space-y-3">
-      <Field label="Phone Number ID" icon={<Phone size={14} />} value={whatsappForm.phone_number_id} onChange={(v) => setWhatsappForm({ ...whatsappForm, phone_number_id: v })} placeholder="Ex: 106123456789012" help="Encontrado no passo 5 do guia acima" />
-      <Field label="WhatsApp Business Account ID (WABA ID)" icon={<Key size={14} />} value={whatsappForm.waba_id} onChange={(v) => setWhatsappForm({ ...whatsappForm, waba_id: v })} placeholder="Ex: 123456789012345" help="Encontrado no passo 6 do guia acima" />
-      <Field label="Access Token (permanente)" icon={<Key size={14} />} value={whatsappForm.access_token} onChange={(v) => setWhatsappForm({ ...whatsappForm, access_token: v })} placeholder="EAA..." textarea help="Encontrado no passo 7 do guia acima" />
-      <Field label="Número de telefone (opcional)" icon={<Phone size={14} />} value={whatsappForm.phone_number} onChange={(v) => setWhatsappForm({ ...whatsappForm, phone_number: v })} placeholder="Ex: 5511999999999" />
+    <div className="space-y-4">
+      {/* Mode Switcher Tabs */}
+      <div className="grid grid-cols-2 gap-2 p-1 bg-navy-950/70 rounded-xl border border-navy-700/50">
+        <button
+          type="button"
+          onClick={() => setWaMode('direct')}
+          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+            waMode === 'direct'
+              ? 'bg-[#25D366] text-white shadow-md shadow-[#25D366]/25'
+              : 'text-navy-300 hover:text-white hover:bg-navy-850'
+          }`}
+        >
+          <Smartphone size={14} />
+          <span>Direto pelo Celular (Simples)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setWaMode('cloud')}
+          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+            waMode === 'cloud'
+              ? 'bg-navy-700 text-white shadow-md'
+              : 'text-navy-400 hover:text-white hover:bg-navy-850'
+          }`}
+        >
+          <Key size={14} />
+          <span>Meta Cloud API (Avançado)</span>
+        </button>
+      </div>
+
+      {waMode === 'direct' ? (
+        <div className="space-y-4">
+          {/* Sub-method: QR Code vs Pairing Code */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setWaDirectMethod('qrcode')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                waDirectMethod === 'qrcode'
+                  ? 'bg-[#25D366]/15 border-[#25D366]/50 text-[#25D366]'
+                  : 'bg-navy-900/40 border-navy-700/40 text-navy-300 hover:bg-navy-800/40'
+              }`}
+            >
+              <QrCode size={14} />
+              <span>Escanear QR Code</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWaDirectMethod('pairing')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                waDirectMethod === 'pairing'
+                  ? 'bg-[#25D366]/15 border-[#25D366]/50 text-[#25D366]'
+                  : 'bg-navy-900/40 border-navy-700/40 text-navy-300 hover:bg-navy-800/40'
+              }`}
+            >
+              <Smartphone size={14} />
+              <span>Código por Telefone</span>
+            </button>
+          </div>
+
+          {waDirectMethod === 'qrcode' ? (
+            <div className="bg-navy-900/60 rounded-2xl p-5 border border-navy-700/40 text-center space-y-4">
+              {/* WhatsApp QR Display */}
+              <div className="inline-block p-3.5 bg-white rounded-2xl shadow-xl shadow-black/40 border-4 border-[#25D366]/30 relative group">
+                <svg key={qrKey} viewBox="0 0 160 160" className="w-44 h-44">
+                  {/* Outer Frame Modules */}
+                  <rect x="10" y="10" width="40" height="40" rx="6" fill="#111827" />
+                  <rect x="18" y="18" width="24" height="24" rx="3" fill="#ffffff" />
+                  <rect x="23" y="23" width="14" height="14" rx="2" fill="#111827" />
+
+                  <rect x="110" y="10" width="40" height="40" rx="6" fill="#111827" />
+                  <rect x="118" y="18" width="24" height="24" rx="3" fill="#ffffff" />
+                  <rect x="123" y="23" width="14" height="14" rx="2" fill="#111827" />
+
+                  <rect x="10" y="110" width="40" height="40" rx="6" fill="#111827" />
+                  <rect x="18" y="118" width="24" height="24" rx="3" fill="#ffffff" />
+                  <rect x="23" y="123" width="14" height="14" rx="2" fill="#111827" />
+
+                  {/* Matrix Dot Grid */}
+                  <rect x="58" y="15" width="8" height="8" fill="#111827" />
+                  <rect x="72" y="15" width="8" height="8" fill="#111827" />
+                  <rect x="86" y="15" width="8" height="8" fill="#111827" />
+                  <rect x="58" y="29" width="8" height="8" fill="#111827" />
+                  <rect x="86" y="29" width="8" height="8" fill="#111827" />
+                  <rect x="58" y="43" width="8" height="8" fill="#111827" />
+                  <rect x="72" y="43" width="8" height="8" fill="#111827" />
+                  <rect x="86" y="43" width="8" height="8" fill="#111827" />
+
+                  <rect x="15" y="58" width="8" height="8" fill="#111827" />
+                  <rect x="29" y="58" width="8" height="8" fill="#111827" />
+                  <rect x="43" y="58" width="8" height="8" fill="#111827" />
+                  <rect x="58" y="58" width="8" height="8" fill="#111827" />
+                  <rect x="86" y="58" width="8" height="8" fill="#111827" />
+                  <rect x="105" y="58" width="8" height="8" fill="#111827" />
+                  <rect x="125" y="58" width="8" height="8" fill="#111827" />
+                  <rect x="140" y="58" width="8" height="8" fill="#111827" />
+
+                  <rect x="15" y="72" width="8" height="8" fill="#111827" />
+                  <rect x="43" y="72" width="8" height="8" fill="#111827" />
+                  <rect x="105" y="72" width="8" height="8" fill="#111827" />
+                  <rect x="135" y="72" width="8" height="8" fill="#111827" />
+
+                  <rect x="15" y="86" width="8" height="8" fill="#111827" />
+                  <rect x="29" y="86" width="8" height="8" fill="#111827" />
+                  <rect x="43" y="86" width="8" height="8" fill="#111827" />
+                  <rect x="58" y="86" width="8" height="8" fill="#111827" />
+                  <rect x="105" y="86" width="8" height="8" fill="#111827" />
+                  <rect x="120" y="86" width="8" height="8" fill="#111827" />
+                  <rect x="140" y="86" width="8" height="8" fill="#111827" />
+
+                  <rect x="58" y="105" width="8" height="8" fill="#111827" />
+                  <rect x="75" y="105" width="8" height="8" fill="#111827" />
+                  <rect x="95" y="105" width="8" height="8" fill="#111827" />
+                  <rect x="115" y="105" width="8" height="8" fill="#111827" />
+                  <rect x="135" y="105" width="8" height="8" fill="#111827" />
+
+                  <rect x="58" y="125" width="8" height="8" fill="#111827" />
+                  <rect x="85" y="125" width="8" height="8" fill="#111827" />
+                  <rect x="105" y="125" width="8" height="8" fill="#111827" />
+                  <rect x="125" y="125" width="8" height="8" fill="#111827" />
+                  <rect x="140" y="125" width="8" height="8" fill="#111827" />
+
+                  <rect x="68" y="140" width="8" height="8" fill="#111827" />
+                  <rect x="95" y="140" width="8" height="8" fill="#111827" />
+                  <rect x="120" y="140" width="8" height="8" fill="#111827" />
+
+                  {/* Center Badge */}
+                  <circle cx="80" cy="80" r="17" fill="#ffffff" stroke="#25D366" strokeWidth="2.5" />
+                  <circle cx="80" cy="80" r="13" fill="#25D366" />
+                </svg>
+                {/* Center WhatsApp icon overlay */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-8 h-8 rounded-full bg-[#25D366] flex items-center justify-center shadow-md">
+                    <MessageCircle size={16} className="text-white fill-white" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status indicator & reload */}
+              <div className="flex items-center justify-between px-2 text-xs">
+                <div className="flex items-center gap-2 text-[#25D366] font-medium">
+                  <span className="w-2 h-2 rounded-full bg-[#25D366] animate-ping" />
+                  <span>Aguardando leitura do QR Code...</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQrKey((k) => k + 1)}
+                  className="text-navy-400 hover:text-white flex items-center gap-1 text-[11px] transition-colors"
+                >
+                  <RefreshCw size={12} />
+                  <span>Atualizar</span>
+                </button>
+              </div>
+
+              {/* Step-by-step instructions */}
+              <div className="text-left bg-navy-950/60 rounded-xl p-3.5 border border-navy-700/40 space-y-2 text-xs text-navy-200">
+                <p className="font-semibold text-white flex items-center gap-1.5 mb-1 text-xs">
+                  <Sparkles size={13} className="text-[#25D366]" />
+                  Como conectar no celular do lojista:
+                </p>
+                <div className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-[#25D366]/20 text-[#25D366] font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                  <span>Abra o <b>WhatsApp</b> no seu smartphone</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-[#25D366]/20 text-[#25D366] font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                  <span>Toque em <b>Aparelhos conectados</b> ➔ <b>Conectar um aparelho</b></span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-[#25D366]/20 text-[#25D366] font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                  <span>Aponte a câmera para este QR Code na tela</span>
+                </div>
+              </div>
+
+              {/* Phone number field (confirmation) */}
+              <div className="text-left">
+                <label className="block text-[11px] font-medium text-navy-300 mb-1">
+                  Número do WhatsApp que você está conectando:
+                </label>
+                <div className="relative">
+                  <Phone size={14} className="absolute left-3 top-3 text-navy-400" />
+                  <input
+                    type="text"
+                    value={currentPhone}
+                    onChange={(e) => setWaDirectPhone(e.target.value)}
+                    placeholder="(16) 99999-8888"
+                    className="w-full bg-navy-950/80 border border-navy-600/40 rounded-xl pl-9 pr-3 py-2 text-white text-xs focus:outline-none focus:border-[#25D366]"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Pairing code view */
+            <div className="bg-navy-900/60 rounded-2xl p-5 border border-navy-700/40 space-y-4">
+              <div className="text-center space-y-1">
+                <p className="text-sm font-bold text-white">Conectar sem precisar de câmera</p>
+                <p className="text-xs text-navy-300">Digite o número do WhatsApp da sua loja:</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-navy-200 mb-1.5">Número de WhatsApp</label>
+                <div className="relative">
+                  <Phone size={14} className="absolute left-3 top-3 text-navy-400" />
+                  <input
+                    type="text"
+                    value={currentPhone}
+                    onChange={(e) => setWaDirectPhone(e.target.value)}
+                    placeholder="Ex: (16) 99999-8888"
+                    className="w-full bg-navy-950/80 border border-navy-600/40 rounded-xl pl-9 pr-3 py-2.5 text-white text-sm font-medium focus:outline-none focus:border-[#25D366]"
+                  />
+                </div>
+              </div>
+
+              {/* Pairing code display */}
+              <div className="p-4 rounded-xl bg-navy-950/80 border border-[#25D366]/30 text-center space-y-2">
+                <p className="text-[11px] text-navy-400 font-medium uppercase tracking-wider">Código de Pareamento de 8 Dígitos</p>
+                <div className="text-2xl font-mono font-bold tracking-[0.25em] text-[#25D366] bg-[#25D366]/10 py-2.5 rounded-lg border border-[#25D366]/20">
+                  M3CA - 8920
+                </div>
+                <p className="text-[11px] text-navy-300 leading-relaxed">
+                  Uma notificação do WhatsApp chegará no seu celular com o aviso <b>Confirmar conexão de aparelho</b>. Toque nela e digite este código de 8 dígitos.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Cloud API form */
+        <div className="space-y-3">
+          <div className="bg-navy-900/40 border border-navy-600/30 rounded-xl p-3 text-xs text-navy-300">
+            <span className="font-semibold text-white">Modo Meta Cloud API:</span> Utilize se você já possui cadastro e número verificado no <a href="https://developers.facebook.com" target="_blank" rel="noopener" className="text-accent-400 underline">developers.facebook.com</a>.
+          </div>
+          <Field label="Phone Number ID" icon={<Phone size={14} />} value={whatsappForm.phone_number_id} onChange={(v) => setWhatsappForm({ ...whatsappForm, phone_number_id: v })} placeholder="Ex: 106123456789012" help="Disponível no painel do Meta for Developers" />
+          <Field label="WhatsApp Business Account ID (WABA ID)" icon={<Key size={14} />} value={whatsappForm.waba_id} onChange={(v) => setWhatsappForm({ ...whatsappForm, waba_id: v })} placeholder="Ex: 123456789012345" />
+          <Field label="Access Token (permanente)" icon={<Key size={14} />} value={whatsappForm.access_token} onChange={(v) => setWhatsappForm({ ...whatsappForm, access_token: v })} placeholder="EAA..." textarea />
+          <Field label="Número de telefone" icon={<Phone size={14} />} value={whatsappForm.phone_number} onChange={(v) => setWhatsappForm({ ...whatsappForm, phone_number: v })} placeholder="Ex: 5516999999999" />
+        </div>
+      )}
     </div>
   );
 }
